@@ -1,0 +1,64 @@
+name: Build and Deploy to Droplet
+
+on:
+  push:
+    branches:
+      - main   # run on merges to main (protected branch)
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Archive build for transfer
+        run: |
+          tar -czf release.tar.gz package.json package-lock.json dist ecosystem.config.js .env.example || true
+
+      - name: Install rsync
+        run: sudo apt-get update && sudo apt-get install -y rsync
+
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_PRIVATE_KEY }}
+
+      - name: Ensure remote directory exists
+        run: ssh -o StrictHostKeyChecking=no ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "mkdir -p ${{ secrets.DEPLOY_PATH }}"
+      
+      - name: Deploy files with rsync
+        run: |
+          rsync -avz --delete --exclude '.git' --exclude 'node_modules' --exclude '.env' -e "ssh -o StrictHostKeyChecking=no" ./ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}
+
+      - name: Install production deps & restart pm2 on remote
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'SSH_EOF'
+            cd ${{ secrets.DEPLOY_PATH }}
+            # install only production modules
+            npm ci --only=production
+            # build not needed if we already copied dist; otherwise uncomment:
+            # npm run build
+            # start or restart using pm2 and ecosystem config
+            if pm2 describe enaur-nestjs > /dev/null; then
+              pm2 reload ecosystem.config.js --env production
+            else
+              pm2 start ecosystem.config.js --env production
+            fi
+            pm2 save
+          SSH_EOF

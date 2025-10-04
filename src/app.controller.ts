@@ -1,9 +1,11 @@
 import { Controller, Get, Post, Body, Headers } from '@nestjs/common';
+import { ApiKey } from './decorators/api-key.decorator';
 
 @Controller() // This makes this class a controller
 export class AppController {
   // GET /api/test - Protected endpoint
   @Get('test')
+  @ApiKey()
   getTest() {
     return {
       message: 'GET test endpoint is working!',
@@ -14,6 +16,7 @@ export class AppController {
 
   // POST /api/test - Protected endpoint that accepts data
   @Post('test')
+  @ApiKey()
   postTest(@Body() postData: any) {
     return {
       message: 'POST test endpoint is working!',

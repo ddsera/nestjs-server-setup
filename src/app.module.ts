@@ -7,6 +7,7 @@ import { AppController } from './app.controller';
     // Load environment variables from .env file
     ConfigModule.forRoot({
       isGlobal: true, // Make config available everywhere
+      envFilePath: '.env', // Explicitly specify the .env file path
     }),
   ],
   controllers: [AppController], // Register our controller
