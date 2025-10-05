@@ -1,17 +1,47 @@
 name: Deploy to Production
 on:
   push:
-    branches: [ dev ]
+    branches: [dev]
   workflow_dispatch:
 
 jobs:
-  deploy:
+  Build:
     runs-on: ubuntu-latest
-    environment: production  # This matches your environment name
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build application
+      run: npm run build
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist-folder
+        path: dist/
+        retention-days: 1
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: Build
+    environment: production
+    
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: dist-folder
+        path: dist/
 
     - name: Setup SSH environment
       env:
@@ -28,15 +58,23 @@ jobs:
 
     - name: Deploy application
       run: |
-        # Add your deployment commands here
+        # Create a tarball of the dist folder
+        tar -czf dist.tar.gz dist/
+        
+        # Copy the tarball to the server
+        scp dist.tar.gz deployer@138.68.224.34:/home/deployer/nestjs-server/nestjs-server-setup/
+        
+        # Extract and deploy on the server
         ssh deployer@138.68.224.34 "
-          echo 'Connected to production server'
-          echo 'Current directory: $(pwd)'
-          uname -a
-          ls -la
           cd /home/deployer/nestjs-server/nestjs-server-setup
-          git pull origin dev
-          npm install
-          npm run build
+          echo 'Backing up current dist folder...'
+          tar -czf dist-backup-$(date +%Y%m%d-%H%M%S).tar.gz dist/ 2>/dev/null || true
+          echo 'Extracting new dist folder...'
+          tar -xzf dist.tar.gz
+          rm dist.tar.gz
+          echo 'Installing production dependencies...'
+          npm ci --only=production
+          echo 'Restarting application...'
           pm2 restart main
+          echo 'Deployment completed successfully!'
         "
