@@ -1,4 +1,4 @@
-name: Deploy to Digital Ocean
+name: Deploy to Server
 
 on:
   push:
@@ -9,30 +9,38 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v4
-    
+    - name: Checkout code
+      uses: actions/checkout@v3
+
     - name: Setup Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v3
       with:
         node-version: '18'
         cache: 'npm'
-    
+
     - name: Install dependencies
       run: npm ci
-    
+
     - name: Build application
       run: npm run build
-    
-    - name: Deploy to server
+
+    - name: Deploy to Server
       uses: appleboy/ssh-action@v1.0.3
       with:
-        host: ${{ secrets.HOST }}
-        username: ${{ secrets.USERNAME }}
-        password: ${{ secrets.PASSWORD }}
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USERNAME }}
+        password: ${{ secrets.SSH_PASSWORD }}
         script: |
-          cd /var/www/nestjs-app
+          echo "Starting deployment..."
+          cd /home/deployer/nestjs-server/nestjs-server-setup
+          echo "Pulling latest code from dev branch..."
           git pull origin dev
+          echo "Installing dependencies..."
           npm ci --production
+          echo "Building application..."
           npm run build
-          pm2 restart nestjs-app || pm2 start dist/main.js --name nestjs-app
+          echo "Restarting application..."
+          pm2 restart nest-app || pm2 start dist/main.js --name nest-app
+          echo "Reloading Caddy..."
           sudo systemctl reload caddy
+          echo "Deployment completed successfully!"
