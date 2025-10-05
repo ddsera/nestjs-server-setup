@@ -33,5 +33,5 @@ jobs:
           echo 'Connected to production server'
           echo 'Current directory: $(pwd)'
           uname -a
-          ls -l
+          ll
         "
