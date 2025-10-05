@@ -34,4 +34,9 @@ jobs:
           echo 'Current directory: $(pwd)'
           uname -a
           ls -la
+          cd /nestjs-server/nestjs-server-setup
+          git pull origin dev
+          npm install
+          npm run build
+          pm2 restart
         "
